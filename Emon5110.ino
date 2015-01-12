@@ -32,7 +32,7 @@ dht DHT;
 
 #include <JeeLib.h>   
 // For RFM12B
-#define MYNODE 19            // Should be unique on network, node ID 30 reserved for base station
+#define MYNODE 17            // Should be unique on network, node ID 30 reserved for base station
 #define RF_freq RF12_433MHZ     // frequency - match to same frequency as RFM12B module (change to 868Mhz or 915Mhz if appropriate)
 #define group 210 
 
@@ -57,7 +57,7 @@ int ihour, imin;
 boolean answer;
 
 void setup()   {
-  Serial.begin(19200);
+  Serial.begin(9600);
   Serial.println("Welcome to Emon5110!");
   delay(500); 				   //wait for power to settle before firing up the RF
   rf12_initialize(MYNODE, RF_freq,group);
@@ -112,6 +112,18 @@ void setup()   {
 
 }
 void loop() {
+    // Send the values to base after the base has sent her message. 
+    if (answer){
+      delay(500);
+      Serial.println("Calling base...");
+      emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
+      emonglcd.humidity = (int) (DHT.humidity);
+      rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
+      //rf12_sendWait(2); 
+      answer = false;
+      //last_emonbase = millis();
+    }
+    
     // Read humidity and temp  
     DHT.read11(dht_dpin);
     
@@ -140,19 +152,8 @@ void loop() {
     display.print(":");
     display.println(smin);
     display.display();
-    
-    // Send the values to base after the base has sent her message. 
-    if (answer){
-      Serial.println("Calling base...");
-      emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
-      emonglcd.humidity = (int) (DHT.humidity);
-      rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
-      rf12_sendWait(2); 
-      answer = false;
-      //last_emonbase = millis();
-
-    }
-    
+    delay(100);
+      
     delay(5000);
     display.clearDisplay();
 
@@ -215,4 +216,5 @@ void loop() {
     }
   }
 }
+//End
 
