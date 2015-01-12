@@ -116,8 +116,9 @@ void loop() {
     if (answer){
       delay(500);
       Serial.println("Calling base...");
-      emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
-      emonglcd.humidity = (int) (DHT.humidity);
+      //emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
+      //emonglcd.humidity = (int) (DHT.humidity);
+      emonglcd.humidity = 38;
       rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
       //rf12_sendWait(2); 
       answer = false;
