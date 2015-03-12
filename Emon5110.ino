@@ -8,7 +8,7 @@ Based on https://github.com/openenergymonitor/EmonGLCD/blob/master/HomeEnergyMon
 
 Schematic also in source folder. 
 
-©Patrik Hermansson 2014
+©Patrik Hermansson 2014-2015
 */
 
 // Nokia 5110 display
@@ -32,17 +32,25 @@ dht DHT;
 
 #include <JeeLib.h>   
 // For RFM12B
-#define MYNODE 19            // Should be unique on network, node ID 30 reserved for base station
+#define MYNODE 21            // Should be unique on network, node ID 30 reserved for base station
 #define RF_freq RF12_433MHZ     // frequency - match to same frequency as RFM12B module (change to 868Mhz or 915Mhz if appropriate)
 #define group 210 
+
+// EnergyMonitor
+#include "EmonLib.h"                   // Include Emon Library
+EnergyMonitor emon1;                   // Create an instance
 
 //---------------------------------------------------
 // Data structures for transfering data between units
 //---------------------------------------------------
-typedef struct { int temp, power2, power3, Vrms; } PayloadTX;         // neat way of packaging data for RF comms
+typedef struct { 
+  byte glcdspace;
+  byte hour;
+  byte minute;
+} PayloadTX;         // neat way of packaging data for RF comms
 PayloadTX emontx;
 
-typedef struct { int temperature, humidity; } PayloadGLCD;
+typedef struct { int temperature, humidity, power; } PayloadGLCD;
 PayloadGLCD emonglcd;
 //-------------------------------------------------------------------------------------------- 
 // Flow control
@@ -55,17 +63,25 @@ String shour, smin;
 int ihour, imin;
 
 boolean answer;
+double Irms;
 
 void setup()   {
-  Serial.begin(19200);
+  Serial.begin(9600);
   Serial.println("Welcome to Emon5110!");
+  
+  // Init RF
   delay(500); 				   //wait for power to settle before firing up the RF
   rf12_initialize(MYNODE, RF_freq,group);
-  delay(100);	
-  //wait for RF to settle befor turning on display
+  delay(100);	 
+  //wait for RF to settle before turning on display
+   
+  // Init energy monitor
+  // http://openenergymonitor.org/emon/buildingblocks/ct-and-ac-power-adaptor-installation-and-calibration-theory
+  // http://openenergymonitor.org/emon/buildingblocks/calibration
+  //emon1.current(0, 10);             // Current: input pin, calibration.
+  emon1.current(4, 10);
    
   Serial.println("Start lcd");
- 
   // Start LCD
   display.begin();
   delay(500);
@@ -102,6 +118,13 @@ void setup()   {
   display.println("So this was easy!");
   display.display();
   
+  Serial.println("Com test with base");
+  emonglcd.temperature = 0; 
+  emonglcd.humidity = 0;
+  delay(100);
+  rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
+  rf12_sendWait(2); 
+  
   Serial.println("Done");
   
   delay(2000);
@@ -112,16 +135,40 @@ void setup()   {
 
 }
 void loop() {
+    // Send the values to base after the base has sent her message. 
+    if (answer){
+      delay(500);
+      Serial.println("Calling base...");
+      
+      // Get power reading from Current Transformer
+      Irms = emon1.calcIrms(1480);  // Calculate Irms only
+      Serial.print(Irms*230.0);	       // Apparent power
+      Serial.print(" ");
+      Serial.println(Irms);		       // Irms
+      
+      // Get temp and humidity from sensor
+      emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
+      emonglcd.humidity = (int) (DHT.humidity);
+      emonglcd.power = (int) (Irms*230.0);
+      //emonglcd.humidity = 38;
+      rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
+      rf12_sendWait(10); 
+      answer = false;
+      //last_emonbase = millis();
+    }
+    
     // Read humidity and temp  
     DHT.read11(dht_dpin);
     
     // Print results on serial port...
-    Serial.print("Current humidity = ");
+    Serial.print("H = ");
     Serial.print(DHT.humidity);
-    Serial.print("%  ");
-    Serial.print("temperature = ");
+    Serial.print("%  T = ");
     Serial.print(DHT.temperature); 
     Serial.println("C  ");
+    Serial.print("Irms: ");	       // Apparent power
+    Serial.println(Irms*230.0);	       // Apparent power
+
 
     // ...and on the 5110-display
     display.setTextColor(BLACK);
@@ -140,19 +187,8 @@ void loop() {
     display.print(":");
     display.println(smin);
     display.display();
-    
-    // Send the values to base after the base has sent her message. 
-    if (answer){
-      Serial.println("Calling base...");
-      emonglcd.temperature = (int) (DHT.temperature*100);                          // set emonglcd payload
-      emonglcd.humidity = (int) (DHT.humidity);
-      rf12_sendNow(0, &emonglcd, sizeof emonglcd);                     //send temperature data via RFM12B using new rf12_sendNow wrapper -glynhudson
-      rf12_sendWait(2); 
-      answer = false;
-      //last_emonbase = millis();
-
-    }
-    
+    delay(100);
+      
     delay(5000);
     display.clearDisplay();
 
@@ -173,11 +209,10 @@ void loop() {
         
         // Get time from server
         // Hour
-        int hour = rf12_data[1];
-        //shour = (char)hour;
-        ihour = hour;
-        Serial.print ("hour: ");
-        Serial.println (hour);
+        //int hour = rf12_data[1];
+        int hour = emontx.hour;
+        //Serial.print ("hour: ");
+        //Serial.println (hour);
 
         if (hour<10) {
           //Serial.println ("Less than 10");
@@ -188,10 +223,10 @@ void loop() {
         }
         //Serial.println (shour);
         // Minute
-        int min = rf12_data[2];
+        int min = emontx.minute;
 
-        Serial.print ("M: ");        
-        Serial.println (min);
+        //Serial.print ("M: ");        
+        //Serial.println (min);
         if (min<10) {
           smin = "0"+String(min);
           //Serial.print ("SM: ");        
@@ -215,4 +250,4 @@ void loop() {
     }
   }
 }
-
+//End
