@@ -1,8 +1,9 @@
 /*
 Emon5110
 A Nokia 5110 display connected to a Arduino Mini Pro and RFM12B. 
-Used as a disply for Openenergymonitor, http://openenergymonitor.org/emon/ and as 
+Used as a display for Openenergymonitor, http://openenergymonitor.org/emon/ and as 
 temp/humidity sensor. 
+Also monitors power via a HWCT004 AC Micro Current Detection Module 50A Current Sensor Module. 
 
 Based on https://github.com/openenergymonitor/EmonGLCD/blob/master/HomeEnergyMonitor/HomeEnergyMonitor.ino
 
